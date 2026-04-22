@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>시군구별 1인가구 청년·노년 비율 버블 지도 (2024)</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif; background: #0f1923; }
+  #map { width: 100vw; height: 100vh; }
+
+  #title-box {
+    position: absolute; top: 16px; left: 50%; transform: translateX(-50%);
+    background: rgba(15,25,35,0.92); color: #e8edf2;
+    padding: 12px 24px; border-radius: 12px; z-index: 1000;
+    text-align: center; border: 1px solid rgba(255,255,255,0.1);
+    backdrop-filter: blur(8px);
+  }
+  #title-box h1 { font-size: 15px; font-weight: 700; letter-spacing: -0.3px; }
+  #title-box p  { font-size: 11px; color: #8fa3b4; margin-top: 2px; }
+
+  #legend {
+    position: absolute; bottom: 24px; right: 16px;
+    background: rgba(15,25,35,0.92); color: #e8edf2;
+    padding: 16px 18px; border-radius: 12px; z-index: 1000;
+    border: 1px solid rgba(255,255,255,0.1);
+    backdrop-filter: blur(8px); min-width: 220px;
+  }
+  #legend h3 { font-size: 12px; font-weight: 700; margin-bottom: 12px; color: #c8d8e8; }
+  .legend-section { margin-bottom: 14px; }
+  .legend-section h4 { font-size: 10px; color: #7a95a8; margin-bottom: 7px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .legend-color-bar {
+    height: 12px; border-radius: 6px;
+    background: linear-gradient(to right, #2563eb, #9ca3af, #dc2626);
+    margin-bottom: 4px;
+  }
+  .legend-color-labels { display: flex; justify-content: space-between; font-size: 10px; color: #8fa3b4; }
+  .bubble-legend { display: flex; align-items: flex-end; gap: 14px; }
+  .bubble-item { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+  .bubble-item span { font-size: 9px; color: #8fa3b4; }
+  .bubble-circle { background: rgba(150,170,190,0.25); border: 1.5px solid rgba(150,170,190,0.5); border-radius: 50%; }
+
+  #filter-box {
+    position: absolute; top: 16px; left: 16px;
+    background: rgba(15,25,35,0.92); color: #e8edf2;
+    padding: 12px 14px; border-radius: 12px; z-index: 1000;
+    border: 1px solid rgba(255,255,255,0.1);
+    backdrop-filter: blur(8px);
+  }
+  #filter-box h3 { font-size: 11px; color: #7a95a8; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .filter-btn {
+    display: block; width: 100%; padding: 6px 10px; margin-bottom: 4px;
+    border-radius: 6px; border: 1px solid rgba(255,255,255,0.15);
+    background: rgba(255,255,255,0.05); color: #c8d8e8;
+    font-size: 11px; cursor: pointer; text-align: left;
+    transition: all 0.2s;
+  }
+  .filter-btn:hover { background: rgba(255,255,255,0.12); }
+  .filter-btn.active { background: rgba(59,130,246,0.25); border-color: #3b82f6; color: #93c5fd; }
+
+  .leaflet-popup-content-wrapper {
+    background: rgba(15,25,35,0.96); color: #e8edf2;
+    border: 1px solid rgba(255,255,255,0.15); border-radius: 10px;
+    backdrop-filter: blur(12px);
+  }
+  .leaflet-popup-tip { background: rgba(15,25,35,0.96); }
+  .leaflet-popup-content { margin: 14px 16px; min-width: 200px; }
+  .popup-title { font-size: 15px; font-weight: 700; margin-bottom: 10px; color: #e8edf2; }
+  .popup-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px; font-size: 12px; }
+  .popup-label { color: #8fa3b4; }
+  .popup-val { font-weight: 600; }
+  .popup-bar-wrap { margin-top: 10px; }
+  .popup-bar-label { font-size: 10px; color: #7a95a8; margin-bottom: 3px; }
+  .popup-bar-track { height: 8px; background: rgba(255,255,255,0.08); border-radius: 4px; overflow: hidden; margin-bottom: 6px; }
+  .popup-bar-fill { height: 100%; border-radius: 4px; }
+  .popup-diff-badge {
+    display: inline-block; padding: 3px 8px; border-radius: 20px;
+    font-size: 11px; font-weight: 700; margin-top: 6px;
+  }
+</style>
+</head>
+<body>
+
+<div id="title-box">
+  <h1>📍 시군구별 1인가구 청년·노년 비율 버블 지도</h1>
+  <p>2024년 인구총조사 · 원 크기 = 1인가구 총수 · 색상 = 청년(20~39세) - 노년(65세↑) 비율 차이</p>
+</div>
+
+<div id="filter-box">
+  <h3>🔍 필터</h3>
+  <button class="filter-btn active" data-filter="all">전체 지역</button>
+  <button class="filter-btn" data-filter="youth">청년 우세 (청년 > 노년)</button>
+  <button class="filter-btn" data-filter="elderly">노년 우세 (노년 > 청년)</button>
+  <button class="filter-btn" data-filter="balanced">균형 (차이 ±10% 미만)</button>
+</div>
+
+<div id="legend">
+  <h3>범 례</h3>
+  <div class="legend-section">
+    <h4>색상 — 청년 비율 − 노년 비율</h4>
+    <div class="legend-color-bar"></div>
+    <div class="legend-color-labels">
+      <span>노년 우세<br>(-50%↓)</span>
+      <span style="text-align:center">균형<br>(0%)</span>
+      <span style="text-align:right">청년 우세<br>(+50%↑)</span>
+    </div>
+  </div>
+  <div class="legend-section">
+    <h4>원 크기 — 1인가구 총수</h4>
+    <div class="bubble-legend">
+      <div class="bubble-item">
+        <div class="bubble-circle" style="width:16px;height:16px;"></div>
+        <span>1만</span>
+      </div>
+      <div class="bubble-item">
+        <div class="bubble-circle" style="width:26px;height:26px;"></div>
+        <span>5만</span>
+      </div>
+      <div class="bubble-item">
+        <div class="bubble-circle" style="width:38px;height:38px;"></div>
+        <span>10만</span>
+      </div>
+      <div class="bubble-item">
+        <div class="bubble-circle" style="width:54px;height:54px;"></div>
+        <span>20만↑</span>
+      </div>
+    </div>
+  </div>
+  <div style="font-size:10px;color:#5a7388;margin-top:6px;">출처: 통계청 인구총조사 2024</div>
+</div>
+
+<div id="map"></div>
+
+<script>
+// ── 데이터 ──────────────────────────────────────────────────────────────
+const RAW = [{"region":"가평군","total":11004,"youth":1863,"elderly":4581,"youth_pct":16.9,"elderly_pct":41.6,"diff":-24.7},{"region":"강남구","total":79274,"youth":38492,"elderly":14616,"youth_pct":48.6,"elderly_pct":18.4,"diff":30.1},{"region":"강동구","total":65601,"youth":26599,"elderly":16604,"youth_pct":40.5,"elderly_pct":25.3,"diff":15.2},{"region":"강릉시","total":39796,"youth":11745,"elderly":13555,"youth_pct":29.5,"elderly_pct":34.1,"diff":-4.5},{"region":"강북구","total":53705,"youth":17218,"elderly":17191,"youth_pct":32.1,"elderly_pct":32.0,"diff":0.1},{"region":"강서구","total":106748,"youth":58785,"elderly":27171,"youth_pct":55.1,"elderly_pct":25.5,"diff":29.6},{"region":"강진군","total":6527,"youth":685,"elderly":3796,"youth_pct":10.5,"elderly_pct":58.2,"diff":-47.7},{"region":"강화군","total":9578,"youth":938,"elderly":5153,"youth_pct":9.8,"elderly_pct":53.8,"diff":-44.0},{"region":"거제시","total":32956,"youth":7093,"elderly":8121,"youth_pct":21.5,"elderly_pct":24.6,"diff":-3.1},{"region":"거창군","total":10789,"youth":1467,"elderly":5362,"youth_pct":13.6,"elderly_pct":49.7,"diff":-36.1},{"region":"경산시","total":54789,"youth":23285,"elderly":12934,"youth_pct":42.5,"elderly_pct":23.6,"diff":18.9},{"region":"경주시","total":44875,"youth":10741,"elderly":17031,"youth_pct":23.9,"elderly_pct":38.0,"diff":-14.0},{"region":"계룡시","total":5379,"youth":1410,"elderly":1564,"youth_pct":26.2,"elderly_pct":29.1,"diff":-2.9},{"region":"계양구","total":37133,"youth":9180,"elderly":10819,"youth_pct":24.7,"elderly_pct":29.1,"diff":-4.4},{"region":"고령군","total":5464,"youth":485,"elderly":2932,"youth_pct":8.9,"elderly_pct":53.7,"diff":-44.8},{"region":"고양시","total":129653,"youth":39478,"elderly":35529,"youth_pct":30.4,"elderly_pct":27.4,"diff":3.0},{"region":"고창군","total":9685,"youth":894,"elderly":5688,"youth_pct":9.2,"elderly_pct":58.7,"diff":-49.5},{"region":"고흥군","total":13252,"youth":880,"elderly":8455,"youth_pct":6.6,"elderly_pct":63.8,"diff":-57.2},{"region":"곡성군","total":5905,"youth":878,"elderly":3086,"youth_pct":14.9,"elderly_pct":52.3,"diff":-37.4},{"region":"공주시","total":19782,"youth":5596,"elderly":7353,"youth_pct":28.3,"elderly_pct":37.2,"diff":-8.9},{"region":"과천시","total":5068,"youth":1517,"elderly":1753,"youth_pct":29.9,"elderly_pct":34.6,"diff":-4.7},{"region":"관악구","total":153605,"youth":100664,"elderly":18862,"youth_pct":65.5,"elderly_pct":12.3,"diff":53.3},{"region":"광명시","total":27741,"youth":7504,"elderly":9392,"youth_pct":27.1,"elderly_pct":33.9,"diff":-6.8},{"region":"광산구","total":55658,"youth":21200,"elderly":11162,"youth_pct":38.1,"elderly_pct":20.1,"diff":18.0},{"region":"광양시","total":21398,"youth":5555,"elderly":5875,"youth_pct":26.0,"elderly_pct":27.5,"diff":-1.5},{"region":"광주시","total":44466,"youth":11494,"elderly":10986,"youth_pct":25.8,"elderly_pct":24.7,"diff":1.1},{"region":"광진구","total":72933,"youth":41886,"elderly":11148,"youth_pct":57.4,"elderly_pct":15.3,"diff":42.1},{"region":"괴산군","total":7900,"youth":1020,"elderly":3775,"youth_pct":12.9,"elderly_pct":47.8,"diff":-34.9},{"region":"구례군","total":4627,"youth":339,"elderly":2609,"youth_pct":7.3,"elderly_pct":56.4,"diff":-49.1},{"region":"구로구","total":62632,"youth":27047,"elderly":15352,"youth_pct":43.2,"elderly_pct":24.5,"diff":18.7},{"region":"구리시","total":22330,"youth":6056,"elderly":6532,"youth_pct":27.1,"elderly_pct":29.3,"diff":-2.1},{"region":"구미시","total":67507,"youth":28246,"elderly":11926,"youth_pct":41.8,"elderly_pct":17.7,"diff":24.2},{"region":"군산시","total":44562,"youth":11682,"elderly":14844,"youth_pct":26.2,"elderly_pct":33.3,"diff":-7.1},{"region":"군위군","total":3969,"youth":335,"elderly":2415,"youth_pct":8.4,"elderly_pct":60.8,"diff":-52.4},{"region":"군포시","total":32652,"youth":9975,"elderly":9754,"youth_pct":30.5,"elderly_pct":29.9,"diff":0.7},{"region":"권선구","total":54333,"youth":21335,"elderly":11210,"youth_pct":39.3,"elderly_pct":20.6,"diff":18.6},{"region":"금산군","total":9380,"youth":1501,"elderly":4378,"youth_pct":16.0,"elderly_pct":46.7,"diff":-30.7},{"region":"금정구","total":40977,"youth":15278,"elderly":13189,"youth_pct":37.3,"elderly_pct":32.2,"diff":5.1},{"region":"금천구","total":53858,"youth":26494,"elderly":10700,"youth_pct":49.2,"elderly_pct":19.9,"diff":29.3},{"region":"기장군","total":23001,"youth":5855,"elderly":7839,"youth_pct":25.5,"elderly_pct":34.1,"diff":-8.6},{"region":"기흥구","total":43181,"youth":16358,"elderly":11045,"youth_pct":37.9,"elderly_pct":25.6,"diff":12.3},{"region":"김제시","total":14314,"youth":1617,"elderly":7674,"youth_pct":11.3,"elderly_pct":53.6,"diff":-42.3},{"region":"김천시","total":23211,"youth":5512,"elderly":9255,"youth_pct":23.7,"elderly_pct":39.9,"diff":-16.1},{"region":"김포시","total":54052,"youth":18060,"elderly":13516,"youth_pct":33.4,"elderly_pct":25.0,"diff":8.4},{"region":"김해시","total":69026,"youth":18191,"elderly":18729,"youth_pct":26.4,"elderly_pct":27.1,"diff":-0.8},{"region":"나주시","total":21110,"youth":5773,"elderly":7656,"youth_pct":27.3,"elderly_pct":36.3,"diff":-8.9},{"region":"남동구","total":71921,"youth":21098,"elderly":20997,"youth_pct":29.3,"elderly_pct":29.2,"diff":0.1},{"region":"남양주시","total":72251,"youth":17626,"elderly":23357,"youth_pct":24.4,"elderly_pct":32.3,"diff":-7.9},{"region":"남원시","total":13482,"youth":1822,"elderly":6646,"youth_pct":13.5,"elderly_pct":49.3,"diff":-35.8},{"region":"남해군","total":8152,"youth":653,"elderly":5047,"youth_pct":8.0,"elderly_pct":61.9,"diff":-53.9},{"region":"노원구","total":67182,"youth":21006,"elderly":23808,"youth_pct":31.3,"elderly_pct":35.4,"diff":-4.2},{"region":"논산시","total":19515,"youth":3977,"elderly":8578,"youth_pct":20.4,"elderly_pct":44.0,"diff":-23.6},{"region":"단양군","total":5365,"youth":496,"elderly":2801,"youth_pct":9.2,"elderly_pct":52.2,"diff":-43.0},{"region":"단원구","total":44403,"youth":15657,"elderly":9070,"youth_pct":35.3,"elderly_pct":20.4,"diff":14.8},{"region":"달서구","total":79175,"youth":24145,"elderly":24326,"youth_pct":30.5,"elderly_pct":30.7,"diff":-0.2},{"region":"달성군","total":31738,"youth":9421,"elderly":8851,"youth_pct":29.7,"elderly_pct":27.9,"diff":1.8},{"region":"담양군","total":7017,"youth":715,"elderly":3654,"youth_pct":10.2,"elderly_pct":52.1,"diff":-41.9},{"region":"당진시","total":30221,"youth":7903,"elderly":8535,"youth_pct":26.2,"elderly_pct":28.2,"diff":-2.1},{"region":"대덕구","total":28673,"youth":8337,"elderly":8554,"youth_pct":29.1,"elderly_pct":29.8,"diff":-0.8},{"region":"덕양구","total":66108,"youth":20210,"elderly":18857,"youth_pct":30.6,"elderly_pct":28.5,"diff":2.0},{"region":"덕진구","total":50184,"youth":19755,"elderly":12255,"youth_pct":39.4,"elderly_pct":24.4,"diff":14.9},{"region":"도봉구","total":43347,"youth":11915,"elderly":15155,"youth_pct":27.5,"elderly_pct":35.0,"diff":-7.5},{"region":"동남구","total":45407,"youth":17610,"elderly":10332,"youth_pct":38.8,"elderly_pct":22.8,"diff":16.0},{"region":"동대문구","total":72355,"youth":38179,"elderly":14633,"youth_pct":52.8,"elderly_pct":20.2,"diff":32.5},{"region":"동두천시","total":14739,"youth":2453,"elderly":6090,"youth_pct":16.6,"elderly_pct":41.3,"diff":-24.7},{"region":"동래구","total":36125,"youth":9910,"elderly":13351,"youth_pct":27.4,"elderly_pct":37.0,"diff":-9.5},{"region":"동안구","total":31648,"youth":11647,"elderly":8346,"youth_pct":36.8,"elderly_pct":26.4,"diff":10.4},{"region":"동작구","total":75148,"youth":43864,"elderly":12954,"youth_pct":58.4,"elderly_pct":17.2,"diff":41.1},{"region":"동해시","total":14626,"youth":2610,"elderly":5844,"youth_pct":17.8,"elderly_pct":40.0,"diff":-22.1},{"region":"마산합포구","total":30202,"youth":6925,"elderly":11919,"youth_pct":22.9,"elderly_pct":39.5,"diff":-16.5},{"region":"마산회원구","total":26291,"youth":4692,"elderly":10484,"youth_pct":17.8,"elderly_pct":39.9,"diff":-22.0},{"region":"마포구","total":73327,"youth":42436,"elderly":11101,"youth_pct":57.9,"elderly_pct":15.1,"diff":42.7},{"region":"만안구","total":29968,"youth":8845,"elderly":9290,"youth_pct":29.5,"elderly_pct":31.0,"diff":-1.5},{"region":"목포시","total":37828,"youth":8569,"elderly":12704,"youth_pct":22.7,"elderly_pct":33.6,"diff":-10.9},{"region":"무안군","total":14749,"youth":5075,"elderly":4690,"youth_pct":34.4,"elderly_pct":31.8,"diff":2.6},{"region":"무주군","total":4328,"youth":428,"elderly":2335,"youth_pct":9.9,"elderly_pct":54.0,"diff":-44.1},{"region":"문경시","total":12148,"youth":1548,"elderly":6424,"youth_pct":12.7,"elderly_pct":52.9,"diff":-40.1},{"region":"미추홀구","total":68649,"youth":23371,"elderly":18891,"youth_pct":34.0,"elderly_pct":27.5,"diff":6.5},{"region":"밀양시","total":19153,"youth":2643,"elderly":9701,"youth_pct":13.8,"elderly_pct":50.7,"diff":-36.9},{"region":"보령시","total":16573,"youth":2923,"elderly":7409,"youth_pct":17.6,"elderly_pct":44.7,"diff":-27.1},{"region":"보성군","total":7693,"youth":474,"elderly":4857,"youth_pct":6.2,"elderly_pct":63.1,"diff":-57.0},{"region":"보은군","total":5528,"youth":452,"elderly":3274,"youth_pct":8.2,"elderly_pct":59.2,"diff":-51.0},{"region":"봉화군","total":5799,"youth":360,"elderly":3421,"youth_pct":6.2,"elderly_pct":59.0,"diff":-52.8},{"region":"부산진구","total":73424,"youth":31314,"elderly":20301,"youth_pct":42.6,"elderly_pct":27.6,"diff":15.0},{"region":"부안군","total":8848,"youth":818,"elderly":5094,"youth_pct":9.2,"elderly_pct":57.6,"diff":-48.3},{"region":"부여군","total":10405,"youth":941,"elderly":6144,"youth_pct":9.0,"elderly_pct":59.0,"diff":-50.0},{"region":"부천시","total":103159,"youth":28749,"elderly":30349,"youth_pct":27.9,"elderly_pct":29.4,"diff":-1.6},{"region":"부평구","total":67646,"youth":19961,"elderly":20219,"youth_pct":29.5,"elderly_pct":29.9,"diff":-0.4},{"region":"분당구","total":52173,"youth":22413,"elderly":11986,"youth_pct":43.0,"elderly_pct":23.0,"diff":20.0},{"region":"사상구","total":37200,"youth":10938,"elderly":12386,"youth_pct":29.4,"elderly_pct":33.3,"diff":-3.9},{"region":"사천시","total":19221,"youth":3852,"elderly":7565,"youth_pct":20.0,"elderly_pct":39.4,"diff":-19.3},{"region":"사하구","total":47771,"youth":12086,"elderly":17678,"youth_pct":25.3,"elderly_pct":37.0,"diff":-11.7},{"region":"산청군","total":6891,"youth":413,"elderly":3950,"youth_pct":6.0,"elderly_pct":57.3,"diff":-51.3},{"region":"삼척시","total":12918,"youth":3259,"elderly":5221,"youth_pct":25.2,"elderly_pct":40.4,"diff":-15.2},{"region":"상당구","total":26686,"youth":6748,"elderly":8865,"youth_pct":25.3,"elderly_pct":33.2,"diff":-7.9},{"region":"상록구","total":50947,"youth":15789,"elderly":11501,"youth_pct":31.0,"elderly_pct":22.6,"diff":8.4},{"region":"상주시","total":17591,"youth":2897,"elderly":8888,"youth_pct":16.5,"elderly_pct":50.5,"diff":-34.1},{"region":"서귀포시","total":26312,"youth":5221,"elderly":8272,"youth_pct":19.8,"elderly_pct":31.4,"diff":-11.6},{"region":"서대문구","total":56770,"youth":30256,"elderly":11506,"youth_pct":53.3,"elderly_pct":20.3,"diff":33.0},{"region":"서북구","total":68945,"youth":34139,"elderly":9834,"youth_pct":49.5,"elderly_pct":14.3,"diff":35.3},{"region":"서산시","total":28426,"youth":8412,"elderly":8688,"youth_pct":29.6,"elderly_pct":30.6,"diff":-1.0},{"region":"서원구","total":34718,"youth":13567,"elderly":8939,"youth_pct":39.1,"elderly_pct":25.7,"diff":13.3},{"region":"서천군","total":8832,"youth":753,"elderly":5285,"youth_pct":8.5,"elderly_pct":59.8,"diff":-51.3},{"region":"서초구","total":49443,"youth":23643,"elderly":9309,"youth_pct":47.8,"elderly_pct":18.8,"diff":29.0},{"region":"성남시","total":134409,"youth":51015,"elderly":33231,"youth_pct":38.0,"elderly_pct":24.7,"diff":13.2},{"region":"성동구","total":48442,"youth":23998,"elderly":9647,"youth_pct":49.5,"elderly_pct":19.9,"diff":29.6},{"region":"성북구","total":70230,"youth":34276,"elderly":15827,"youth_pct":48.8,"elderly_pct":22.5,"diff":26.3},{"region":"성산구","total":32336,"youth":12457,"elderly":6052,"youth_pct":38.5,"elderly_pct":18.7,"diff":19.8},{"region":"성주군","total":7517,"youth":679,"elderly":3848,"youth_pct":9.0,"elderly_pct":51.2,"diff":-42.2},{"region":"세종시","total":52339,"youth":26066,"elderly":8326,"youth_pct":49.8,"elderly_pct":15.9,"diff":33.9},{"region":"소사구","total":27386,"youth":6418,"elderly":9568,"youth_pct":23.4,"elderly_pct":34.9,"diff":-11.5},{"region":"속초시","total":15008,"youth":2935,"elderly":5396,"youth_pct":19.6,"elderly_pct":36.0,"diff":-16.4},{"region":"송파구","total":89720,"youth":43387,"elderly":17646,"youth_pct":48.4,"elderly_pct":19.7,"diff":28.7},{"region":"수성구","total":48812,"youth":13562,"elderly":16982,"youth_pct":27.8,"elderly_pct":34.8,"diff":-7.0},{"region":"수영구","total":34205,"youth":14142,"elderly":9915,"youth_pct":41.3,"elderly_pct":29.0,"diff":12.4},{"region":"수원시","total":184111,"youth":84515,"elderly":35882,"youth_pct":45.9,"elderly_pct":19.5,"diff":26.4},{"region":"수정구","total":46305,"youth":16363,"elderly":11712,"youth_pct":35.3,"elderly_pct":25.3,"diff":10.0},{"region":"수지구","total":29531,"youth":13450,"elderly":7279,"youth_pct":45.5,"elderly_pct":24.6,"diff":20.9},{"region":"순창군","total":4489,"youth":410,"elderly":2625,"youth_pct":9.1,"elderly_pct":58.5,"diff":-49.3},{"region":"순천시","total":38970,"youth":11086,"elderly":12804,"youth_pct":28.4,"elderly_pct":32.9,"diff":-4.4},{"region":"시흥시","total":69466,"youth":21818,"elderly":13953,"youth_pct":31.4,"elderly_pct":20.1,"diff":11.3},{"region":"신안군","total":7257,"youth":611,"elderly":3735,"youth_pct":8.4,"elderly_pct":51.5,"diff":-43.0},{"region":"아산시","total":57275,"youth":21717,"elderly":12605,"youth_pct":37.9,"elderly_pct":22.0,"diff":15.9},{"region":"안동시","total":30172,"youth":8129,"elderly":11766,"youth_pct":26.9,"elderly_pct":39.0,"diff":-12.1},{"region":"안산시","total":95350,"youth":31446,"elderly":20571,"youth_pct":33.0,"elderly_pct":21.6,"diff":11.4},{"region":"안성시","total":32385,"youth":10948,"elderly":8329,"youth_pct":33.8,"elderly_pct":25.7,"diff":8.1},{"region":"안양시","total":61616,"youth":20492,"elderly":17636,"youth_pct":33.3,"elderly_pct":28.6,"diff":4.6},{"region":"양구군","total":3267,"youth":824,"elderly":1271,"youth_pct":25.2,"elderly_pct":38.9,"diff":-13.7},{"region":"양산시","total":50226,"youth":12803,"elderly":15462,"youth_pct":25.5,"elderly_pct":30.8,"diff":-5.3},{"region":"양양군","total":5548,"youth":699,"elderly":2611,"youth_pct":12.6,"elderly_pct":47.1,"diff":-34.5},{"region":"양주시","total":34604,"youth":9340,"elderly":10185,"youth_pct":27.0,"elderly_pct":29.4,"diff":-2.4},{"region":"양천구","total":47886,"youth":15098,"elderly":15439,"youth_pct":31.5,"elderly_pct":32.2,"diff":-0.7},{"region":"양평군","total":18544,"youth":2474,"elderly":8085,"youth_pct":13.3,"elderly_pct":43.6,"diff":-30.3},{"region":"여수시","total":40319,"youth":9666,"elderly":14860,"youth_pct":24.0,"elderly_pct":36.9,"diff":-12.9},{"region":"여주시","total":17247,"youth":3779,"elderly":6136,"youth_pct":21.9,"elderly_pct":35.6,"diff":-13.7},{"region":"연수구","total":40339,"youth":15544,"elderly":8949,"youth_pct":38.5,"elderly_pct":22.2,"diff":16.3},{"region":"연제구","total":32878,"youth":10748,"elderly":11024,"youth_pct":32.7,"elderly_pct":33.5,"diff":-0.8},{"region":"연천군","total":7186,"youth":1407,"elderly":3406,"youth_pct":19.6,"elderly_pct":47.4,"diff":-27.8},{"region":"영광군","total":8929,"youth":1266,"elderly":4494,"youth_pct":14.2,"elderly_pct":50.3,"diff":-36.2},{"region":"영덕군","total":7676,"youth":637,"elderly":4550,"youth_pct":8.3,"elderly_pct":59.3,"diff":-51.0},{"region":"영도구","total":20492,"youth":3473,"elderly":9641,"youth_pct":16.9,"elderly_pct":47.0,"diff":-30.1},{"region":"영동군","total":8397,"youth":1079,"elderly":4338,"youth_pct":12.8,"elderly_pct":51.7,"diff":-38.8},{"region":"영등포구","total":79698,"youth":44900,"elderly":13338,"youth_pct":56.3,"elderly_pct":16.7,"diff":39.6},{"region":"영암군","total":10852,"youth":1757,"elderly":4406,"youth_pct":16.2,"elderly_pct":40.6,"diff":-24.4},{"region":"영양군","total":3322,"youth":273,"elderly":1946,"youth_pct":8.2,"elderly_pct":58.6,"diff":-50.4},{"region":"영월군","total":7817,"youth":793,"elderly":3749,"youth_pct":10.1,"elderly_pct":48.0,"diff":-37.8},{"region":"영주시","total":17547,"youth":3517,"elderly":7974,"youth_pct":20.0,"elderly_pct":45.4,"diff":-25.4},{"region":"영천시","total":18978,"youth":2481,"elderly":8780,"youth_pct":13.1,"elderly_pct":46.3,"diff":-33.2},{"region":"영통구","total":52242,"youth":30712,"elderly":6567,"youth_pct":58.8,"elderly_pct":12.6,"diff":46.2},{"region":"예산군","total":13540,"youth":2038,"elderly":6585,"youth_pct":15.1,"elderly_pct":48.6,"diff":-33.6},{"region":"예천군","total":9349,"youth":1412,"elderly":4992,"youth_pct":15.1,"elderly_pct":53.4,"diff":-38.3},{"region":"오산시","total":38659,"youth":15933,"elderly":6344,"youth_pct":41.2,"elderly_pct":16.4,"diff":24.8},{"region":"오정구","total":21288,"youth":3919,"elderly":7159,"youth_pct":18.4,"elderly_pct":33.6,"diff":-15.2},{"region":"옥천군","total":7623,"youth":695,"elderly":4151,"youth_pct":9.1,"elderly_pct":54.5,"diff":-45.3},{"region":"옹진군","total":4793,"youth":1214,"elderly":1643,"youth_pct":25.3,"elderly_pct":34.3,"diff":-9.0},{"region":"완도군","total":8386,"youth":812,"elderly":4580,"youth_pct":9.7,"elderly_pct":54.6,"diff":-44.9},{"region":"완산구","total":55798,"youth":19366,"elderly":15948,"youth_pct":34.7,"elderly_pct":28.6,"diff":6.1},{"region":"완주군","total":17360,"youth":4978,"elderly":5631,"youth_pct":28.7,"elderly_pct":32.4,"diff":-3.8},{"region":"용산구","total":40445,"youth":20312,"elderly":7441,"youth_pct":50.2,"elderly_pct":18.4,"diff":31.8},{"region":"용인시","total":110585,"youth":43419,"elderly":26890,"youth_pct":39.3,"elderly_pct":24.3,"diff":14.9},{"region":"울릉군","total":2093,"youth":427,"elderly":651,"youth_pct":20.4,"elderly_pct":31.1,"diff":-10.7},{"region":"울주군","total":28971,"youth":6732,"elderly":9074,"youth_pct":23.2,"elderly_pct":31.3,"diff":-8.1},{"region":"울진군","total":9303,"youth":1496,"elderly":4462,"youth_pct":16.1,"elderly_pct":48.0,"diff":-31.9},{"region":"원미구","total":54485,"youth":18412,"elderly":13622,"youth_pct":33.8,"elderly_pct":25.0,"diff":8.8},{"region":"원주시","total":63311,"youth":21670,"elderly":16567,"youth_pct":34.2,"elderly_pct":26.2,"diff":8.1},{"region":"유성구","total":65805,"youth":37907,"elderly":8651,"youth_pct":57.6,"elderly_pct":13.1,"diff":44.5},{"region":"은평구","total":70568,"youth":27530,"elderly":19415,"youth_pct":39.0,"elderly_pct":27.5,"diff":11.5},{"region":"음성군","total":17950,"youth":4360,"elderly":5682,"youth_pct":24.3,"elderly_pct":31.7,"diff":-7.4},{"region":"의령군","total":5784,"youth":433,"elderly":3462,"youth_pct":7.5,"elderly_pct":59.9,"diff":-52.4},{"region":"의성군","total":10618,"youth":842,"elderly":6576,"youth_pct":7.9,"elderly_pct":61.9,"diff":-54.0},{"region":"의왕시","total":14092,"youth":4473,"elderly":4377,"youth_pct":31.7,"elderly_pct":31.1,"diff":0.7},{"region":"의정부시","total":63852,"youth":18436,"elderly":19282,"youth_pct":28.9,"elderly_pct":30.2,"diff":-1.3},{"region":"의창구","total":30867,"youth":8480,"elderly":8505,"youth_pct":27.5,"elderly_pct":27.6,"diff":-0.1},{"region":"이천시","total":31518,"youth":11494,"elderly":7596,"youth_pct":36.5,"elderly_pct":24.1,"diff":12.4},{"region":"익산시","total":46643,"youth":14013,"elderly":15980,"youth_pct":30.0,"elderly_pct":34.3,"diff":-4.2},{"region":"인제군","total":5619,"youth":1474,"elderly":1963,"youth_pct":26.2,"elderly_pct":34.9,"diff":-8.7},{"region":"일산동구","total":37647,"youth":12653,"elderly":8366,"youth_pct":33.6,"elderly_pct":22.2,"diff":11.4},{"region":"일산서구","total":25898,"youth":6615,"elderly":8306,"youth_pct":25.5,"elderly_pct":32.1,"diff":-6.5},{"region":"임실군","total":4852,"youth":676,"elderly":2740,"youth_pct":13.9,"elderly_pct":56.5,"diff":-42.5},{"region":"장성군","total":6433,"youth":937,"elderly":3306,"youth_pct":14.6,"elderly_pct":51.4,"diff":-36.8},{"region":"장수군","total":3652,"youth":270,"elderly":2096,"youth_pct":7.4,"elderly_pct":57.4,"diff":-50.0},{"region":"장안구","total":38793,"youth":14948,"elderly":10023,"youth_pct":38.5,"elderly_pct":25.8,"diff":12.7},{"region":"장흥군","total":6894,"youth":650,"elderly":4104,"youth_pct":9.4,"elderly_pct":59.5,"diff":-50.1},{"region":"전주시","total":105982,"youth":39121,"elderly":28203,"youth_pct":36.9,"elderly_pct":26.6,"diff":10.3},{"region":"정선군","total":7122,"youth":765,"elderly":3298,"youth_pct":10.7,"elderly_pct":46.3,"diff":-35.6},{"region":"정읍시","total":18501,"youth":2652,"elderly":9054,"youth_pct":14.3,"elderly_pct":48.9,"diff":-34.6},{"region":"제주시","total":68668,"youth":20394,"elderly":16897,"youth_pct":29.7,"elderly_pct":24.6,"diff":5.1},{"region":"제천시","total":23101,"youth":5459,"elderly":8959,"youth_pct":23.6,"elderly_pct":38.8,"diff":-15.2},{"region":"종로구","total":29779,"youth":14407,"elderly":6118,"youth_pct":48.4,"elderly_pct":20.5,"diff":27.8},{"region":"중랑구","total":69149,"youth":24754,"elderly":18803,"youth_pct":35.8,"elderly_pct":27.2,"diff":8.6},{"region":"중원구","total":35931,"youth":12239,"elderly":9533,"youth_pct":34.1,"elderly_pct":26.5,"diff":7.5},{"region":"증평군","total":6876,"youth":2083,"elderly":2088,"youth_pct":30.3,"elderly_pct":30.4,"diff":-0.1},{"region":"진도군","total":5804,"youth":588,"elderly":3287,"youth_pct":10.1,"elderly_pct":56.6,"diff":-46.5},{"region":"진안군","total":4287,"youth":305,"elderly":2415,"youth_pct":7.1,"elderly_pct":56.3,"diff":-49.2},{"region":"진주시","total":57549,"youth":20065,"elderly":17659,"youth_pct":34.9,"elderly_pct":30.7,"diff":4.2},{"region":"진천군","total":14658,"youth":4297,"elderly":3812,"youth_pct":29.3,"elderly_pct":26.0,"diff":3.3},{"region":"진해구","total":27922,"youth":7115,"elderly":8414,"youth_pct":25.5,"elderly_pct":30.1,"diff":-4.7},{"region":"창녕군","total":11146,"youth":1013,"elderly":6054,"youth_pct":9.1,"elderly_pct":54.3,"diff":-45.2},{"region":"창원시","total":147618,"youth":39669,"elderly":45374,"youth_pct":26.9,"elderly_pct":30.7,"diff":-3.9},{"region":"처인구","total":37873,"youth":13611,"elderly":8566,"youth_pct":35.9,"elderly_pct":22.6,"diff":13.3},{"region":"천안시","total":114352,"youth":51749,"elderly":20166,"youth_pct":45.3,"elderly_pct":17.6,"diff":27.6},{"region":"철원군","total":6072,"youth":1218,"elderly":2703,"youth_pct":20.1,"elderly_pct":44.5,"diff":-24.5},{"region":"청도군","total":7770,"youth":502,"elderly":4683,"youth_pct":6.5,"elderly_pct":60.3,"diff":-53.8},{"region":"청송군","total":5207,"youth":570,"elderly":2835,"youth_pct":10.9,"elderly_pct":54.4,"diff":-43.5},{"region":"청양군","total":5299,"youth":540,"elderly":2950,"youth_pct":10.2,"elderly_pct":55.7,"diff":-45.5},{"region":"청원구","total":34147,"youth":14709,"elderly":7071,"youth_pct":43.1,"elderly_pct":20.7,"diff":22.4},{"region":"청주시","total":147442,"youth":59450,"elderly":33455,"youth_pct":40.3,"elderly_pct":22.7,"diff":17.6},{"region":"춘천시","total":50484,"youth":19525,"elderly":14262,"youth_pct":38.7,"elderly_pct":28.3,"diff":10.4},{"region":"충주시","total":39350,"youth":13219,"elderly":12044,"youth_pct":33.6,"elderly_pct":30.6,"diff":3.0},{"region":"칠곡군","total":18783,"youth":4178,"elderly":5253,"youth_pct":22.2,"elderly_pct":28.0,"diff":-5.7},{"region":"태백시","total":7562,"youth":1025,"elderly":3549,"youth_pct":13.6,"elderly_pct":46.9,"diff":-33.4},{"region":"태안군","total":11729,"youth":1927,"elderly":5430,"youth_pct":16.4,"elderly_pct":46.3,"diff":-29.9},{"region":"통영시","total":20253,"youth":3064,"elderly":7972,"youth_pct":15.1,"elderly_pct":39.4,"diff":-24.2},{"region":"파주시","total":59018,"youth":18179,"elderly":15669,"youth_pct":30.8,"elderly_pct":26.5,"diff":4.3},{"region":"팔달구","total":38743,"youth":17520,"elderly":8082,"youth_pct":45.2,"elderly_pct":20.9,"diff":24.4},{"region":"평창군","total":8185,"youth":902,"elderly":3775,"youth_pct":11.0,"elderly_pct":46.1,"diff":-35.1},{"region":"평택시","total":97089,"youth":39961,"elderly":17752,"youth_pct":41.2,"elderly_pct":18.3,"diff":22.9},{"region":"포천시","total":22914,"youth":4843,"elderly":7997,"youth_pct":21.1,"elderly_pct":34.9,"diff":-13.8},{"region":"포항시","total":77434,"youth":20162,"elderly":26495,"youth_pct":26.0,"elderly_pct":34.2,"diff":-8.2},{"region":"하남시","total":40621,"youth":16282,"elderly":9027,"youth_pct":40.1,"elderly_pct":22.2,"diff":17.9},{"region":"하동군","total":7998,"youth":567,"elderly":4525,"youth_pct":7.1,"elderly_pct":56.6,"diff":-49.5},{"region":"함안군","total":9882,"youth":943,"elderly":5091,"youth_pct":9.5,"elderly_pct":51.5,"diff":-42.0},{"region":"함양군","total":7316,"youth":627,"elderly":4225,"youth_pct":8.6,"elderly_pct":57.8,"diff":-49.2},{"region":"함평군","total":5688,"youth":401,"elderly":3453,"youth_pct":7.0,"elderly_pct":60.7,"diff":-53.7},{"region":"합천군","total":9136,"youth":584,"elderly":5749,"youth_pct":6.4,"elderly_pct":62.9,"diff":-56.5},{"region":"해남군","total":11640,"youth":1150,"elderly":6616,"youth_pct":9.9,"elderly_pct":56.8,"diff":-47.0},{"region":"해운대구","total":51816,"youth":12733,"elderly":19223,"youth_pct":24.6,"elderly_pct":37.1,"diff":-12.5},{"region":"홍성군","total":17415,"youth":4548,"elderly":6569,"youth_pct":26.1,"elderly_pct":37.7,"diff":-11.6},{"region":"홍천군","total":12151,"youth":1846,"elderly":5634,"youth_pct":15.2,"elderly_pct":46.4,"diff":-31.2},{"region":"화성시","total":124878,"youth":58706,"elderly":19382,"youth_pct":47.0,"elderly_pct":15.5,"diff":31.5},{"region":"화순군","total":10216,"youth":1248,"elderly":5398,"youth_pct":12.2,"elderly_pct":52.8,"diff":-40.6},{"region":"화천군","total":4147,"youth":1030,"elderly":1699,"youth_pct":24.8,"elderly_pct":41.0,"diff":-16.1},{"region":"횡성군","total":8105,"youth":791,"elderly":3907,"youth_pct":9.8,"elderly_pct":48.2,"diff":-38.4},{"region":"흥덕구","total":51891,"youth":24426,"elderly":8580,"youth_pct":47.1,"elderly_pct":16.5,"diff":30.5}];
+
+// ── 좌표 DB ─────────────────────────────────────────────────────────────
+const COORDS = {
+  "가평군":[37.831,127.510],"강남구":[37.517,127.047],"강동구":[37.530,127.124],"강릉시":[37.752,128.876],"강북구":[37.639,127.025],"강서구":[37.551,126.849],
+  "강진군":[34.642,126.767],"강화군":[37.747,126.488],"거제시":[34.880,128.621],"거창군":[35.686,127.909],"경산시":[35.825,128.741],"경주시":[35.856,129.225],
+  "계룡시":[36.274,127.249],"계양구":[37.537,126.738],"고령군":[35.726,128.266],"고양시":[37.658,126.832],"고창군":[35.434,126.702],"고흥군":[34.611,127.278],
+  "곡성군":[35.282,127.292],"공주시":[36.446,127.119],"과천시":[37.429,126.987],"관악구":[37.478,126.951],"광명시":[37.478,126.864],"광산구":[35.139,126.793],
+  "광양시":[34.994,127.696],"광주시":[37.429,127.254],"광진구":[37.538,127.082],"괴산군":[36.815,127.787],"구례군":[35.203,127.462],"구로구":[37.495,126.887],
+  "구리시":[37.596,127.130],"구미시":[36.119,128.344],"군산시":[35.967,126.736],"군위군":[36.244,128.570],"군포시":[37.361,126.935],"권선구":[37.258,126.984],
+  "금산군":[36.108,127.488],"금정구":[35.243,129.092],"금천구":[37.457,126.895],"기장군":[35.244,129.222],"기흥구":[37.275,127.114],"김제시":[35.803,126.880],
+  "김천시":[36.130,128.113],"김포시":[37.616,126.716],"김해시":[35.234,128.889],"나주시":[35.016,126.711],"남동구":[37.447,126.731],"남양주시":[37.636,127.216],
+  "남원시":[35.416,127.390],"남해군":[34.838,127.893],"노원구":[37.654,127.056],"논산시":[36.187,127.099],"단양군":[36.984,128.365],"단원구":[37.322,126.830],
+  "달서구":[35.830,128.532],"달성군":[35.774,128.432],"담양군":[35.322,126.988],"당진시":[36.890,126.629],"대덕구":[36.347,127.415],"덕양구":[37.634,126.856],
+  "덕진구":[35.848,127.105],"도봉구":[37.668,127.047],"동남구":[36.798,127.154],"동대문구":[37.574,127.040],"동두천시":[37.904,127.060],"동래구":[35.206,129.084],
+  "동안구":[37.391,126.952],"동작구":[37.512,126.939],"동해시":[37.524,129.114],"마산합포구":[35.185,128.563],"마산회원구":[35.217,128.583],"마포구":[37.566,126.902],
+  "만안구":[37.394,126.927],"목포시":[34.812,126.392],"무안군":[34.990,126.481],"무주군":[36.007,127.660],"문경시":[36.586,128.186],"미추홀구":[37.453,126.706],
+  "밀양시":[35.504,128.747],"보령시":[36.333,126.612],"보성군":[34.772,127.080],"보은군":[36.490,127.729],"봉화군":[36.893,128.732],"부산진구":[35.163,129.053],
+  "부안군":[35.731,126.731],"부여군":[36.275,126.909],"부천시":[37.503,126.766],"부평구":[37.508,126.722],"분당구":[37.357,127.111],"사상구":[35.151,128.984],
+  "사천시":[35.004,128.065],"사하구":[35.103,128.975],"산청군":[35.415,127.873],"삼척시":[37.450,129.165],"상당구":[36.638,127.508],"상록구":[37.300,126.856],
+  "상주시":[36.411,128.159],"서귀포시":[33.254,126.560],"서대문구":[37.579,126.937],"서북구":[36.815,127.142],"서산시":[36.785,126.450],"서원구":[36.598,127.458],
+  "서천군":[36.079,126.691],"서초구":[37.483,127.032],"성남시":[37.419,127.126],"성동구":[37.563,127.037],"성북구":[37.589,127.017],"성산구":[35.142,128.704],
+  "성주군":[35.919,128.283],"세종시":[36.480,127.289],"소사구":[37.481,126.800],"속초시":[38.207,128.592],"송파구":[37.514,127.106],"수성구":[35.858,128.629],
+  "수영구":[35.145,129.113],"수원시":[37.263,127.029],"수정구":[37.447,127.137],"수지구":[37.322,127.094],"순창군":[35.374,127.137],"순천시":[34.950,127.487],
+  "시흥시":[37.380,126.803],"신안군":[34.827,126.107],"아산시":[36.790,127.002],"안동시":[36.568,128.729],"안산시":[37.323,126.831],"안성시":[37.008,127.280],
+  "안양시":[37.394,126.957],"양구군":[38.106,127.990],"양산시":[35.334,129.036],"양양군":[38.075,128.627],"양주시":[37.785,127.046],"양천구":[37.517,126.867],
+  "양평군":[37.492,127.488],"여수시":[34.761,127.662],"여주시":[37.298,127.638],"연수구":[37.410,126.678],"연제구":[35.177,129.080],"연천군":[38.097,127.075],
+  "영광군":[35.277,126.512],"영덕군":[36.415,129.365],"영도구":[35.091,129.068],"영동군":[36.175,127.776],"영등포구":[37.526,126.896],"영암군":[34.800,126.697],
+  "영양군":[36.667,129.113],"영월군":[37.184,128.462],"영주시":[36.806,128.624],"영천시":[35.973,128.938],"영통구":[37.240,127.054],"예산군":[36.682,126.845],
+  "예천군":[36.657,128.294],"오산시":[37.150,127.077],"오정구":[37.546,126.789],"옥천군":[36.302,127.570],"옹진군":[37.446,126.636],"완도군":[34.310,126.755],
+  "완산구":[35.813,127.108],"완주군":[35.905,127.162],"용산구":[37.532,126.989],"용인시":[37.284,127.190],"울릉군":[37.481,130.905],"울주군":[35.521,129.243],
+  "울진군":[36.993,129.400],"원미구":[37.501,126.756],"원주시":[37.342,127.921],"유성구":[36.362,127.356],"은평구":[37.603,126.929],"음성군":[36.940,127.690],
+  "의령군":[35.320,128.261],"의성군":[36.352,128.697],"의왕시":[37.345,126.969],"의정부시":[37.738,127.033],"의창구":[35.258,128.622],"이천시":[37.272,127.435],
+  "익산시":[35.948,126.954],"인제군":[38.069,128.171],"일산동구":[37.660,126.797],"일산서구":[37.671,126.762],"임실군":[35.608,127.289],"장성군":[35.302,126.786],
+  "장수군":[35.648,127.521],"장안구":[37.300,127.011],"장흥군":[34.681,126.908],"전주시":[35.824,127.148],"정선군":[37.380,128.660],"정읍시":[35.570,126.856],
+  "제주시":[33.499,126.531],"제천시":[37.133,128.191],"종로구":[37.573,126.979],"중랑구":[37.606,127.093],"중원구":[37.437,127.148],"증평군":[36.785,127.581],
+  "진도군":[34.487,126.264],"진안군":[35.791,127.426],"진주시":[35.180,128.107],"진천군":[36.856,127.435],"진해구":[35.145,128.695],"창녕군":[35.544,128.492],
+  "창원시":[35.228,128.682],"처인구":[37.238,127.202],"천안시":[36.808,127.152],"철원군":[38.146,127.314],"청도군":[35.647,128.737],"청송군":[36.436,129.057],
+  "청양군":[36.459,126.802],"청원구":[36.680,127.489],"청주시":[36.643,127.489],"춘천시":[37.882,127.730],"충주시":[36.991,127.926],"칠곡군":[35.994,128.401],
+  "태백시":[37.160,128.986],"태안군":[36.745,126.298],"통영시":[34.854,128.433],"파주시":[37.760,126.780],"팔달구":[37.286,127.009],"평창군":[37.370,128.491],
+  "평택시":[36.992,127.113],"포천시":[37.894,127.200],"포항시":[36.019,129.343],"하남시":[37.540,127.215],"하동군":[35.067,127.752],"함안군":[35.271,128.406],
+  "함양군":[35.520,127.725],"함평군":[35.066,126.516],"합천군":[35.567,128.166],"해남군":[34.574,126.599],"해운대구":[35.163,129.163],"홍성군":[36.601,126.660],
+  "홍천군":[37.697,127.888],"화성시":[37.199,126.831],"화순군":[35.065,126.987],"화천군":[38.106,127.708],"횡성군":[37.492,128.000],"흥덕구":[36.607,127.451]
+};
+
+// ── 지도 초기화 ──────────────────────────────────────────────────────────
+const map = L.map('map', { center: [36.5, 127.8], zoom: 7, zoomControl: true });
+L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+  attribution: '© OpenStreetMap contributors © CARTO',
+  maxZoom: 18
+}).addTo(map);
+
+// ── 색상 함수 ────────────────────────────────────────────────────────────
+function diffColor(diff) {
+  // diff 범위: -60 ~ +60, 0=회색, 양수=파랑(청년), 음수=빨강(노년)
+  const t = Math.max(-1, Math.min(1, diff / 55));
+  if (t >= 0) {
+    // 회색(0.5,0.6,0.65) → 파랑(0.15,0.40,0.95)
+    const r = Math.round(128 - t * 89);
+    const g = Math.round(154 - t * 103);
+    const b = Math.round(166 + t * 76);
+    return `rgb(${r},${g},${b})`;
+  } else {
+    const a = -t;
+    // 회색 → 빨강(0.88, 0.17, 0.17)
+    const r = Math.round(128 + a * 97);
+    const g = Math.round(154 - a * 111);
+    const b = Math.round(166 - a * 121);
+    return `rgb(${r},${g},${b})`;
+  }
+}
+
+// ── 버블 크기 ────────────────────────────────────────────────────────────
+function bubbleRadius(total) {
+  return Math.max(6, Math.sqrt(total / 1000) * 1.8);
+}
+
+// ── 마커 생성 ────────────────────────────────────────────────────────────
+let allMarkers = [];
+let currentFilter = 'all';
+
+function passes(d) {
+  if (currentFilter === 'all') return true;
+  if (currentFilter === 'youth') return d.diff > 0;
+  if (currentFilter === 'elderly') return d.diff < 0;
+  if (currentFilter === 'balanced') return Math.abs(d.diff) < 10;
+  return true;
+}
+
+function buildMarkers() {
+  allMarkers.forEach(m => map.removeLayer(m));
+  allMarkers = [];
+
+  RAW.forEach(d => {
+    const coord = COORDS[d.region];
+    if (!coord) return;
+    if (!passes(d)) return;
+
+    const r = bubbleRadius(d.total);
+    const color = diffColor(d.diff);
+    const opacity = 0.75;
+
+    const circle = L.circleMarker([coord[0], coord[1]], {
+      radius: r,
+      fillColor: color,
+      fillOpacity: opacity,
+      color: 'rgba(255,255,255,0.3)',
+      weight: 1
+    });
+
+    const diffLabel = d.diff > 0
+      ? `<span style="color:#60a5fa">+${d.diff}%p (청년 우세)</span>`
+      : d.diff < 0
+        ? `<span style="color:#f87171">${d.diff}%p (노년 우세)</span>`
+        : `<span style="color:#9ca3af">0%p (균형)</span>`;
+
+    const badgeColor = d.diff > 0 ? 'rgba(59,130,246,0.25)' : d.diff < 0 ? 'rgba(220,38,38,0.25)' : 'rgba(100,116,139,0.25)';
+    const badgeBorder = d.diff > 0 ? '#3b82f6' : d.diff < 0 ? '#dc2626' : '#64748b';
+
+    const youthW = Math.min(100, d.youth_pct);
+    const elderlyW = Math.min(100, d.elderly_pct);
+
+    const popup = `
+      <div class="popup-title">📍 ${d.region}</div>
+      <div class="popup-row"><span class="popup-label">1인가구 총수</span><span class="popup-val">${d.total.toLocaleString()}가구</span></div>
+      <div class="popup-row"><span class="popup-label">청년(20~39세)</span><span class="popup-val" style="color:#60a5fa">${d.youth.toLocaleString()}가구 (${d.youth_pct}%)</span></div>
+      <div class="popup-row"><span class="popup-label">노년(65세↑)</span><span class="popup-val" style="color:#f87171">${d.elderly.toLocaleString()}가구 (${d.elderly_pct}%)</span></div>
+      <div class="popup-bar-wrap">
+        <div class="popup-bar-label">청년 비율</div>
+        <div class="popup-bar-track"><div class="popup-bar-fill" style="width:${youthW}%;background:linear-gradient(90deg,#1d4ed8,#60a5fa)"></div></div>
+        <div class="popup-bar-label">노년 비율</div>
+        <div class="popup-bar-track"><div class="popup-bar-fill" style="width:${elderlyW}%;background:linear-gradient(90deg,#991b1b,#f87171)"></div></div>
+      </div>
+      <div><span class="popup-diff-badge" style="background:${badgeColor};border:1px solid ${badgeBorder}">차이: ${diffLabel}</span></div>
+    `;
+    circle.bindPopup(popup, { maxWidth: 260 });
+
+    // hover tooltip
+    circle.on('mouseover', function() {
+      this.setStyle({ weight: 2, color: 'rgba(255,255,255,0.7)' });
+    });
+    circle.on('mouseout', function() {
+      this.setStyle({ weight: 1, color: 'rgba(255,255,255,0.3)' });
+    });
+
+    circle.addTo(map);
+    allMarkers.push(circle);
+  });
+}
+
+buildMarkers();
+
+// ── 필터 버튼 ────────────────────────────────────────────────────────────
+document.querySelectorAll('.filter-btn').forEach(btn => {
+  btn.addEventListener('click', function() {
+    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+    this.classList.add('active');
+    currentFilter = this.dataset.filter;
+    buildMarkers();
+  });
+});
+</script>
+</body>
+</html>
